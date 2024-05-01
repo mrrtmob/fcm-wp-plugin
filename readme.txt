@@ -1,4 +1,4 @@
-=== FCM Push Notification from WP ===
+=== FCM WP Push Notification ===
 Contributors: tmob
 Donate link: https://www.buymeacoffee.com/tmob
 Tags: fcm, firebase, push, notification, android, ios, flutter

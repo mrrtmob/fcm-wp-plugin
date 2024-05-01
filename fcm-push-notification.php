@@ -37,8 +37,29 @@ function create_custom_table()
     dbDelta($sql);
 }
 
+function create_version_table()
+{
+    global $wpdb;
+
+    $table_name = $wpdb->prefix . 'fcm_plugin_data';
+
+    $charset_collate = $wpdb->get_charset_collate();
+
+    $sql = "CREATE TABLE $table_name (
+        id mediumint(9) NOT NULL AUTO_INCREMENT,
+        version_string varchar(255) NOT NULL,
+        categories_string varchar(255) NOT NULL,
+        is_force_update tinyint(1) NOT NULL,
+        PRIMARY KEY  (id)
+    ) $charset_collate;";
+
+    require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+    dbDelta($sql);
+}
+
 // Create the table when the plugin is activated
 register_activation_hook(__FILE__, 'create_custom_table');
+register_activation_hook(__FILE__, 'create_version_table');
 
 function insert_custom_notification($post_id, $title, $body)
 {
@@ -61,26 +82,28 @@ function insert_custom_notification($post_id, $title, $body)
     );
 }
 
-// Remove custom database table when the plugin is deactivated
-function custom_remove_table_on_deactivation()
+// Drop tables on plugin deactivation
+function custom_remove_tables_on_deactivation()
 {
     global $wpdb;
 
-    $table_name = $wpdb->prefix . 'custom_notifications'; // Prefix with WordPress database prefix
+    $table_name1 = $wpdb->prefix . 'custom_notifications'; // Prefix with WordPress database prefix
+    $table_name2 = $wpdb->prefix . 'fcm_plugin_data';
 
-    $wpdb->query("DROP TABLE IF EXISTS $table_name");
+    $wpdb->query("DROP TABLE IF EXISTS $table_name1, $table_name2");
 }
 
-register_deactivation_hook(__FILE__, 'custom_remove_table_on_deactivation');
+register_deactivation_hook(__FILE__, 'custom_remove_tables_on_deactivation');
 
 // Remove custom database table when the plugin is uninstalled
 function custom_remove_table_on_uninstall()
 {
     global $wpdb;
 
-    $table_name = $wpdb->prefix . 'custom_notifications'; // Prefix with WordPress database prefix
+    $table_name1 = $wpdb->prefix . 'custom_notifications'; // Prefix with WordPress database prefix
+    $table_name2 = $wpdb->prefix . 'fcm_plugin_data';
 
-    $wpdb->query("DROP TABLE IF EXISTS $table_name");
+    $wpdb->query("DROP TABLE IF EXISTS $table_name1, $table_name2");
 }
 
 register_uninstall_hook(__FILE__, 'custom_remove_table_on_uninstall');
@@ -129,7 +152,7 @@ class FCMPLUGIN_Push_Notification
 
         $post_types = get_post_types($args, 'objects');
 
-        if ($post_types) { 
+        if ($post_types) {
 
             // If there are any custom public post types.
             foreach ($post_types  as $post_type) {
@@ -326,7 +349,7 @@ class FCMPLUGIN_Push_Notification
 
         $test->post_type = "test";
         $test->ID = 0;
-        $test->post_title = "Teste Push Notification";
+        $test->post_title = "Test Push Notification";
         $test->post_content = "Test from Firebase Push Notification Plugin";
         $test->post_excerpt = "Test from Firebase Push Notification Plugin";
         $test->post_url = "https://blizzer.tech";
@@ -350,127 +373,133 @@ class FCMPLUGIN_Push_Notification
     //function fcmplugin_notification($title, $content, $resume, $post_id, $image){
     function fcmplugin_notification($post, $sendOnlyData, $showLocalNotification, $command)
     {
-		// Check if the post belongs to category ID 48,1,6
-		$post_categories = wp_get_post_categories($post->ID);
-		if (in_array(48, $post_categories) || in_array(6, $post_categories) || in_array(1, $post_categories)) {
-			
-        	$from = get_bloginfo('name');
-			//$content = 'There are new post notification from '.$from;
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'fcm_plugin_data';
 
-			$post_type = esc_attr($post->post_type);
-			$post_id = esc_attr($post->ID);
-			$post_title = $post->post_title;
-			$content = esc_html(wp_strip_all_tags(preg_replace("/\r|\n/", " ", $post->post_content)));
+        // Retrieve categories from the fcm_plugin_data table
+        $categories_string = $wpdb->get_var("SELECT categories_string FROM $table_name ORDER BY id DESC LIMIT 1");
 
-			$content = wp_specialchars_decode($content, ENT_QUOTES);
+        // Convert the comma-separated category IDs string to an array
+        $categories_array = explode(',', $categories_string);
 
-			$shotcodes_tags = array('vc_row', 'vc_column', 'vc_column', 'vc_column_text', 'vc_message');
-			$content = preg_replace('/\[(\/?(' . implode('|', $shotcodes_tags) . ').*?(?=\]))\]/', ' ', $content);
+        // Check if the post belongs to category ID 
+        $post_categories = wp_get_post_categories($post->ID);
+        if (array_intersect($categories_array, $post_categories)) {
 
-			$content = preg_replace('/\[(\/?.*?(?=\]))\]/', ' ', $content);
+            $from = get_bloginfo('name');
+            //$content = 'There are new post notification from '.$from;
 
-			$resume = wp_specialchars_decode(esc_attr($post->post_excerpt), ENT_QUOTES);
+            $post_type = esc_attr($post->post_type);
+            $post_id = esc_attr($post->ID);
+            $post_title = $post->post_title;
+            $content = esc_html(wp_strip_all_tags(preg_replace("/\r|\n/", " ", $post->post_content)));
 
-			$post_url = esc_url(get_the_permalink($post->ID)); 
+            $content = wp_specialchars_decode($content, ENT_QUOTES);
 
-			$thumb_id = get_post_thumbnail_id($post_id);
+            $shotcodes_tags = array('vc_row', 'vc_column', 'vc_column', 'vc_column_text', 'vc_message');
+            $content = preg_replace('/\[(\/?(' . implode('|', $shotcodes_tags) . ').*?(?=\]))\]/', ' ', $content);
 
-			$thumb_url = wp_get_attachment_image_src($thumb_id, 'full');
+            $content = preg_replace('/\[(\/?.*?(?=\]))\]/', ' ', $content);
 
-			$image = $thumb_url ? esc_url($thumb_url[0]) : '';
+            $resume = wp_specialchars_decode(esc_attr($post->post_excerpt), ENT_QUOTES);
 
-			if (_mb_strlen($image) == 0) {
-				$image = get_option('fcmplugin_default_image');
-			}
+            $post_url = esc_url(get_the_permalink($post->ID));
 
-			$sound =  esc_attr(get_option('fcmplugin_sound'));
+            $thumb_id = get_post_thumbnail_id($post_id);
 
+            $thumb_url = wp_get_attachment_image_src($thumb_id, 'full');
 
-			$topic =  esc_attr(get_option('fcmplugin_topic'));
-			$apiKey = esc_attr(get_option('fcmplugin_api'));
-			$url = 'https://fcm.googleapis.com/fcm/send';
+            $image = $thumb_url ? esc_url($thumb_url[0]) : '';
 
-			$customFields =  esc_attr(get_option('fcmplugin_custom_fields'));
-			//$this->write_log('customFields: ' . $customFields);
+            if (_mb_strlen($image) == 0) {
+                $image = get_option('fcmplugin_default_image');
+            }
 
-			$arrCustomFieldsValues = [];
-
-			if (_mb_strlen($customFields) > 0) {
-
-				$arrCustomFields = explode("|", $customFields);
-				foreach ($arrCustomFields as $i => $customField) :
-
-					$arrCustomFieldsValues[$customField] = esc_attr(get_post_meta($post_id, $customField, TRUE));
-				endforeach;
+            $sound =  esc_attr(get_option('fcmplugin_sound'));
 
 
-			} else {
-				//$this->write_log('arrCustomFields: Vazio');
-			}
+            $topic =  esc_attr(get_option('fcmplugin_topic'));
+            $apiKey = esc_attr(get_option('fcmplugin_api'));
+            $url = 'https://fcm.googleapis.com/fcm/send';
 
-			$notification_data = array(
-				'click_action'          => 'FLUTTER_NOTIFICATION_CLICK',
-				'message'               => _mb_strlen($resume) == 0 ? _mb_substr(wp_strip_all_tags($content), 0, 55) . '...' : $resume,
-				'post_type'             => $post_type,
-				'post_id'               => $post_id,
-				'title'                 => $post_title,
-				'image'                 => $image,
-				'url'                   => $post_url,
-				'show_in_notification'  => $showLocalNotification,
-				'command'               => $command,
-				'dialog_title'          => $post_title,
-				'dialog_text'           => _mb_strlen($resume) == 0 ? _mb_substr(wp_strip_all_tags($content), 0, 100) . '...' : $resume,
-				'dialog_image'          => $image,
-				'sound'                 => _mb_strlen($sound) == 0 ? 'default' : $sound,
-				'customm_fields'        => $arrCustomFieldsValues,
-				'test'                    => 'test'
-			);
+            $customFields =  esc_attr(get_option('fcmplugin_custom_fields'));
+            //$this->write_log('customFields: ' . $customFields);
 
-			$this->write_log('notification_data: ' . json_encode($notification_data));
+            $arrCustomFieldsValues = [];
 
-			$notification = array(
-				'title'                 => $post_title,
-				'body'                  => _mb_strlen($resume) == 0 ? _mb_substr(wp_strip_all_tags($content), 0, 55) . '...' : $resume,
-				'content_available'     => true,
-				'android_channel_id'    => get_option('fcmplugin_channel'),
-				'click_action'          => 'FLUTTER_NOTIFICATION_CLICK',
-				'sound'                 => _mb_strlen($sound) == 0 ? 'default' : $sound,
-				'image'                 => $image,
-			);
+            if (_mb_strlen($customFields) > 0) {
 
-			$post = array(
-				'to'                    => '/topics/' . $topic,
-				'collapse_key'          => 'type_a',
-				'notification'          => $notification,
-				'priority'              => 'high',
-				'data'                  => $notification_data,
-				'timeToLive'            => 10,
-			);
+                $arrCustomFields = explode("|", $customFields);
+                foreach ($arrCustomFields as $i => $customField) :
 
-			$payload = json_encode($post);
+                    $arrCustomFieldsValues[$customField] = esc_attr(get_post_meta($post_id, $customField, TRUE));
+                endforeach;
+            } else {
+                //$this->write_log('arrCustomFields: Vazio');
+            }
 
-			$args = array(
-				'timeout'           => 45,
-				'redirection'       => 5,
-				'httpversion'       => '1.1',
-				'method'            => 'POST',
-				'body'              => $payload,
-				'sslverify'         => false,
-				'headers'           => array(
-					'Content-Type'      => 'application/json',
-					'Authorization'     => 'key=' . $apiKey,
-				),
-				'cookies'           => array()
-			);
+            $notification_data = array(
+                'click_action'          => 'FLUTTER_NOTIFICATION_CLICK',
+                'message'               => _mb_strlen($resume) == 0 ? _mb_substr(wp_strip_all_tags($content), 0, 55) . '...' : $resume,
+                'post_type'             => $post_type,
+                'post_id'               => $post_id,
+                'title'                 => $post_title,
+                'image'                 => $image,
+                'url'                   => $post_url,
+                'show_in_notification'  => $showLocalNotification,
+                'command'               => $command,
+                'dialog_title'          => $post_title,
+                'dialog_text'           => _mb_strlen($resume) == 0 ? _mb_substr(wp_strip_all_tags($content), 0, 100) . '...' : $resume,
+                'dialog_image'          => $image,
+                'sound'                 => _mb_strlen($sound) == 0 ? 'default' : $sound,
+                'customm_fields'        => $arrCustomFieldsValues,
+                'test'                    => 'test'
+            );
 
-			$response = wp_remote_post($url, $args);
-			insert_custom_notification($notification_data['post_id'], $notification_data['title'], $notification_data['message']);
+            $this->write_log('notification_data: ' . json_encode($notification_data));
 
-			return json_encode($post);
-    	}
-		
-		return json_encode(array('message' => 'Notification not sent for this post.'));
-        
+            $notification = array(
+                'title'                 => $post_title,
+                'body'                  => _mb_strlen($resume) == 0 ? _mb_substr(wp_strip_all_tags($content), 0, 55) . '...' : $resume,
+                'content_available'     => true,
+                'android_channel_id'    => get_option('fcmplugin_channel'),
+                'click_action'          => 'FLUTTER_NOTIFICATION_CLICK',
+                'sound'                 => _mb_strlen($sound) == 0 ? 'default' : $sound,
+                'image'                 => $image,
+            );
+
+            $post = array(
+                'to'                    => '/topics/' . $topic,
+                'collapse_key'          => 'type_a',
+                'notification'          => $notification,
+                'priority'              => 'high',
+                'data'                  => $notification_data,
+                'timeToLive'            => 10,
+            );
+
+            $payload = json_encode($post);
+
+            $args = array(
+                'timeout'           => 45,
+                'redirection'       => 5,
+                'httpversion'       => '1.1',
+                'method'            => 'POST',
+                'body'              => $payload,
+                'sslverify'         => false,
+                'headers'           => array(
+                    'Content-Type'      => 'application/json',
+                    'Authorization'     => 'key=' . $apiKey,
+                ),
+                'cookies'           => array()
+            );
+
+            $response = wp_remote_post($url, $args);
+            insert_custom_notification($notification_data['post_id'], $notification_data['title'], $notification_data['message']);
+
+            return json_encode($post);
+        }
+
+        return json_encode(array('message' => 'Notification not sent for this post.'));
     }
 
 
@@ -521,18 +550,23 @@ add_action('rest_api_init', 'custom_api_endpoint');
 // ========================= api get version ============================
 add_action('rest_api_init', 'custom_endpoint');
 
-function custom_endpoint() {
+function custom_endpoint()
+{
     register_rest_route('wp/v2', '/version', array(
         'methods' => 'GET',
         'callback' => 'custom_endpoint_callback',
     ));
 }
 
-function custom_endpoint_callback($data) {
-    // Your custom logic here
+function custom_endpoint_callback($data)
+{
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'fcm_plugin_data';
+    $latest_version = $wpdb->get_var("SELECT version_string FROM $table_name ORDER BY id DESC LIMIT 1");
+    $is_force_update = $wpdb->get_var("SELECT is_force_update FROM $table_name ORDER BY id DESC LIMIT 1");
     $response = array(
-        'version' => '1.0.0',
-		'is_force_update' => false,
+        'version' => $latest_version,
+        'is_force_update' => $is_force_update,
     );
     return rest_ensure_response($response);
 }
