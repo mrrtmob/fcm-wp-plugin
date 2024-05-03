@@ -138,7 +138,7 @@ if (!defined('ABSPATH')) {
 if (!defined("FCMPLUGIN_VERSION_CURRENT")) define("FCMPLUGIN_VERSION_CURRENT", '1');
 if (!defined("FCMPLUGIN_URL")) define("FCMPLUGIN_URL", plugin_dir_url(__FILE__));
 if (!defined("FCMPLUGIN_PLUGIN_DIR")) define("FCMPLUGIN_PLUGIN_DIR", plugin_dir_path(__FILE__));
-if (!defined("FCMPLUGIN_PLUGIN_NM")) define("FCMPLUGIN_PLUGIN_NM", 'FCM Push Notification');
+if (!defined("FCMPLUGIN_PLUGIN_NM")) define("FCMPLUGIN_PLUGIN_NM", 'Mobile settings');
 if (!defined("FCMPLUGIN_TRANSLATION")) define("FCMPLUGIN_TRANSLATION", 'fcmplugin_translation');
 
 /* FCMPLUGIN */
