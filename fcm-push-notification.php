@@ -54,6 +54,23 @@ function create_show_categories_table()
     require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
     dbDelta($sql);
 }
+function create_show_news_table()
+{
+    global $wpdb;
+
+    $table_name = $wpdb->prefix . 'show_news';
+
+    $charset_collate = $wpdb->get_charset_collate();
+
+    $sql = "CREATE TABLE $table_name (
+        id mediumint(9) NOT NULL AUTO_INCREMENT,
+        category_ids text NOT NULL,
+        PRIMARY KEY  (id)
+    ) $charset_collate;";
+
+    require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+    dbDelta($sql);
+}
 
 function create_version_table()
 {
@@ -79,6 +96,7 @@ function create_version_table()
 register_activation_hook(__FILE__, 'create_custom_table');
 register_activation_hook(__FILE__, 'create_show_categories_table');
 register_activation_hook(__FILE__, 'create_version_table');
+register_activation_hook(__FILE__, 'create_show_news_table');
 
 function insert_custom_notification($post_id, $title, $body)
 {
@@ -109,9 +127,10 @@ function custom_remove_tables_on_deactivation()
     $table_name1 = $wpdb->prefix . 'custom_notifications'; // Prefix with WordPress database prefix
     $table_name2 = $wpdb->prefix . 'fcm_plugin_data';
     $table_name3 = $wpdb->prefix . 'show_categories';
+    $table_name4 = $wpdb->prefix . 'show_news';
 
 
-    $wpdb->query("DROP TABLE IF EXISTS $table_name1, $table_name2 , $table_name3");
+    $wpdb->query("DROP TABLE IF EXISTS $table_name1, $table_name2 , $table_name3, $table_name4");
 }
 
 register_deactivation_hook(__FILE__, 'custom_remove_tables_on_deactivation');
@@ -124,8 +143,9 @@ function custom_remove_table_on_uninstall()
     $table_name1 = $wpdb->prefix . 'custom_notifications'; // Prefix with WordPress database prefix
     $table_name2 = $wpdb->prefix . 'show_categories';
     $table_name3 = $wpdb->prefix . 'fcm_plugin_data';
+    $table_name4 = $wpdb->prefix . 'show_news';
 
-    $wpdb->query("DROP TABLE IF EXISTS $table_name1, $table_name2, $table_name3");
+    $wpdb->query("DROP TABLE IF EXISTS $table_name1, $table_name2, $table_name3, $table_name4");
 }
 
 register_uninstall_hook(__FILE__, 'custom_remove_table_on_uninstall');
