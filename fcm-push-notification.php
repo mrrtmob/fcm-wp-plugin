@@ -629,7 +629,7 @@ function custom_api_callback($data)
 // Add a custom API endpoint to retrieve categories and their details
 function custom_categories_details_api_endpoint()
 {
-    register_rest_route('wp/v1', '/show-categories/', array(
+    register_rest_route('wp/v2', '/show-categories/', array(
         'methods' => 'GET',
         'callback' => 'custom_categories_details_api_callback',
     ));
