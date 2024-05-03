@@ -561,7 +561,7 @@ $FCMPLUGIN_Push_Notification_OBJ = new FCMPLUGIN_Push_Notification();
 // Add a custom endpoint
 function custom_api_endpoint()
 {
-    register_rest_route('v2', '/notifications/', array(
+    register_rest_route('wp/v2', '/notifications/', array(
         'methods' => 'GET',
         'callback' => 'custom_api_callback',
     ));
