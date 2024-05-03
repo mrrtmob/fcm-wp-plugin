@@ -37,6 +37,24 @@ function create_custom_table()
     dbDelta($sql);
 }
 
+function create_show_categories_table()
+{
+    global $wpdb;
+
+    $table_name = $wpdb->prefix . 'show_categories';
+
+    $charset_collate = $wpdb->get_charset_collate();
+
+    $sql = "CREATE TABLE $table_name (
+        id mediumint(9) NOT NULL AUTO_INCREMENT,
+        category_ids text NOT NULL,
+        PRIMARY KEY  (id)
+    ) $charset_collate;";
+
+    require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+    dbDelta($sql);
+}
+
 function create_version_table()
 {
     global $wpdb;
@@ -59,6 +77,7 @@ function create_version_table()
 
 // Create the table when the plugin is activated
 register_activation_hook(__FILE__, 'create_custom_table');
+register_activation_hook(__FILE__, 'create_show_categories_table');
 register_activation_hook(__FILE__, 'create_version_table');
 
 function insert_custom_notification($post_id, $title, $body)
@@ -89,8 +108,10 @@ function custom_remove_tables_on_deactivation()
 
     $table_name1 = $wpdb->prefix . 'custom_notifications'; // Prefix with WordPress database prefix
     $table_name2 = $wpdb->prefix . 'fcm_plugin_data';
+    $table_name3 = $wpdb->prefix . 'show_categories';
 
-    $wpdb->query("DROP TABLE IF EXISTS $table_name1, $table_name2");
+
+    $wpdb->query("DROP TABLE IF EXISTS $table_name1, $table_name2 , $table_name3");
 }
 
 register_deactivation_hook(__FILE__, 'custom_remove_tables_on_deactivation');
@@ -101,9 +122,10 @@ function custom_remove_table_on_uninstall()
     global $wpdb;
 
     $table_name1 = $wpdb->prefix . 'custom_notifications'; // Prefix with WordPress database prefix
-    $table_name2 = $wpdb->prefix . 'fcm_plugin_data';
+    $table_name2 = $wpdb->prefix . 'show_categories';
+    $table_name3 = $wpdb->prefix . 'fcm_plugin_data';
 
-    $wpdb->query("DROP TABLE IF EXISTS $table_name1, $table_name2");
+    $wpdb->query("DROP TABLE IF EXISTS $table_name1, $table_name2, $table_name3");
 }
 
 register_uninstall_hook(__FILE__, 'custom_remove_table_on_uninstall');
@@ -572,6 +594,8 @@ function custom_endpoint_callback($data)
 }
 // ========================= api get version =============================
 
+
+// ========================= api get categories =============================
 // Callback function for the custom endpoint
 function custom_api_callback($data)
 {
@@ -600,3 +624,93 @@ function custom_api_callback($data)
     // Return the array of notification objects as JSON response
     return $notifications;
 }
+
+
+// Add a custom API endpoint to retrieve categories and their details
+function custom_categories_details_api_endpoint()
+{
+    register_rest_route('wp/v1', '/show-categories/', array(
+        'methods' => 'GET',
+        'callback' => 'custom_categories_details_api_callback',
+    ));
+}
+
+add_action('rest_api_init', 'custom_categories_details_api_endpoint');
+
+// Callback function for the custom categories endpoint
+function custom_categories_details_api_callback($data)
+{
+    global $wpdb;
+
+    // Fetch category IDs from the show_categories table
+    $table_name = $wpdb->prefix . 'show_categories';
+    $category_ids = $wpdb->get_col("SELECT category_ids FROM $table_name");
+
+    // Initialize an array to store category details
+    $categories_details = array();
+
+    // Loop through each category ID and query its details
+    foreach ($category_ids as $category_id_string) {
+        // Convert comma-separated string to an array of IDs
+        $category_ids_array = explode(',', $category_id_string);
+
+        // Fetch category details based on the IDs
+        foreach ($category_ids_array as $category_id) {
+            $category = get_category($category_id);
+            if ($category) {
+                $category_data = array(
+                    'id' => $category->term_id,
+                    'count' => $category->count,
+                    'description' => $category->description,
+                    'link' => get_category_link($category->term_id),
+                    'name' => $category->name,
+                    'slug' => $category->slug,
+                    'taxonomy' => $category->taxonomy,
+                    'parent' => $category->parent,
+                    'meta' => $category->meta,
+                    '_links' => array(
+                        'self' => array(
+                            array(
+                                'href' => rest_url("wp/v2/categories/{$category->term_id}")
+                            )
+                        ),
+                        'collection' => array(
+                            array(
+                                'href' => rest_url("wp/v2/categories")
+                            )
+                        ),
+                        'about' => array(
+                            array(
+                                'href' => rest_url("wp/v2/taxonomies/{$category->taxonomy}")
+                            )
+                        ),
+                        'up' => array(
+                            array(
+                                'embeddable' => true,
+                                'href' => rest_url("wp/v2/categories/{$category->parent}")
+                            )
+                        ),
+                        'wp:post_type' => array(
+                            array(
+                                'href' => rest_url("wp/v2/posts?categories={$category->term_id}")
+                            )
+                        ),
+                        'curies' => array(
+                            array(
+                                'name' => 'wp',
+                                'href' => 'https://api.w.org/{rel}',
+                                'templated' => true
+                            )
+                        )
+                    )
+                );
+                $categories_details[] = $category_data;
+            }
+        }
+    }
+
+    // Return the array of category details as JSON response
+    return $categories_details;
+}
+
+// ========================= api get categories =============================

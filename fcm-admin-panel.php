@@ -14,6 +14,7 @@ $active_tab = isset($_GET['tab']) ? esc_attr($_GET['tab']) : 'front_page_options
     <a href="<?php echo admin_url('admin.php'); ?>?page=fcmplugin_push_notification&tab=front_page_options" class="nav-tab <?php echo $active_tab == 'front_page_options' ? 'nav-tab-active' : ''; ?>">FCM Options</a>
     <a href="<?php echo admin_url('admin.php'); ?>?page=fcmplugin_push_notification&tab=test_fcm" class="nav-tab <?php echo $active_tab == 'test_fcm' ? 'nav-tab-active' : ''; ?>">Test Push Notification</a>
     <a href="<?php echo admin_url('admin.php'); ?>?page=fcmplugin_push_notification&tab=version" class="nav-tab <?php echo $active_tab == 'version' ? 'nav-tab-active' : ''; ?>">Version</a> <!-- New Tab -->
+    <a href="<?php echo admin_url('admin.php'); ?>?page=fcmplugin_push_notification&tab=show_categories" class="nav-tab <?php echo $active_tab == 'show_categories' ? 'nav-tab-active' : ''; ?>">Show Categories</a>
 </h2>
 
 <?php
@@ -113,12 +114,111 @@ if ($active_tab == 'front_page_options') {
         </div>
 <?php
     }
+} else if ($active_tab == 'show_categories') {
+    // Initialize selected categories array
+    $selected_categories = array();
+
+    // Load selected categories from the database
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'show_categories';
+    $selected_categories_row = $wpdb->get_row("SELECT * FROM $table_name LIMIT 1");
+    if ($selected_categories_row) {
+        $selected_categories = explode(',', $selected_categories_row->category_ids);
+    }
+
+    // Handle form submission
+    if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["update_categories"])) {
+        if (isset($_POST["selected_categories"]) && is_array($_POST["selected_categories"])) {
+            $selected_categories = array_map('intval', $_POST["selected_categories"]); // Sanitize and validate
+
+            // Save selected categories to the database
+            $category_ids = implode(',', $selected_categories);
+            if ($selected_categories_row) {
+                // Update existing row
+                $wpdb->update($table_name, array('category_ids' => $category_ids), array('id' => $selected_categories_row->id));
+            } else {
+                // Insert new row
+                $wpdb->insert($table_name, array('category_ids' => $category_ids));
+            }
+
+            // Optionally, you can add a success message here
+            echo '<div class="updated"><p>Categories saved successfully.</p></div>';
+        }
+    }
+?>
+    <div>
+        <form action="" method="post" class="form-notification">
+            <fieldset>
+                <legend><h4 style="margin: 0">Select Categories:</h4></legend>
+                <div class="category-wrapper">
+                    <?php
+                    $categories = get_categories();
+                    foreach ($categories as $category) {
+                        $checked = in_array($category->term_id, $selected_categories) ? 'checked' : '';
+                        echo '<div class="category-item"><label><input type="checkbox" name="selected_categories[]" value="' . $category->term_id . '" ' . $checked . '> ' . $category->name . '</label><br></div>';
+                    }
+                    ?>
+                </div>
+            </fieldset>
+            <div class="col-sm-10"><p class="submit"><input type="submit" name="update_categories" id="submit" class="button button-primary" value="Save Categories"></p></div>
+        </form>
+    </div>
+    <style>
+        input[type=checkbox] {
+            margin: 0 !important;
+        }
+        
+        .form-notification {
+            padding: 10px;
+            font-size: 1rem;
+        }
+        
+        .form-group {
+            display: flex;
+            gap: 5px;
+            align-items: flex-start;
+        }
+        
+        .form-group.col {
+            flex-direction: column;
+        }
+        
+        .form-section {
+            margin-bottom: 15px;
+            display: grid;
+            gap: 5px;
+        }
+        
+        .category-wrapper {
+            box-sizing: border-box;
+            width: 100%;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+            place-items: stretch;
+            gap: 10px;
+            padding: 5px 0;
+        }
+        
+        .category-wrapper .category-item {
+            box-sizing: border-box;
+            width: 100%;
+            padding: 10px;
+            display: grid;
+            place-items: start;
+            gap: 10px;
+            border-radius: 0.375rem;
+            border: 1px solid #dbdfe6;
+            box-shadow: 0 .125rem .25rem rgba(8, 10, 12, .075);
+            background: #ffffff;
+        }
+    </style>
+    <?php
 } else if ($active_tab == 'version') {
 
     // Version Content
     $plugin_data = get_plugin_data(__FILE__); // Assuming this file is the main plugin file
     $plugin_version = $plugin_data['Version'];
-?>
+    ?>
 <?php
     if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["update_version"])) {
         // Check if the form is submitted and the update_version button is clicked
@@ -154,14 +254,14 @@ if ($active_tab == 'front_page_options') {
     }
 ?>
 <?php
-// Fetch existing version number from the database
-global $wpdb;
-$table_name = $wpdb->prefix . 'fcm_plugin_data';
-$latest_version = $wpdb->get_var("SELECT version_string FROM $table_name ORDER BY id DESC LIMIT 1");
+    // Fetch existing version number from the database
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'fcm_plugin_data';
+    $latest_version = $wpdb->get_var("SELECT version_string FROM $table_name ORDER BY id DESC LIMIT 1");
 
-// Fetch categories associated with the latest version from the database
-$latest_categories = $wpdb->get_var("SELECT categories_string FROM $table_name ORDER BY id DESC LIMIT 1");
-$latest_categories_array = explode(',', $latest_categories);
+    // Fetch categories associated with the latest version from the database
+    $latest_categories = $wpdb->get_var("SELECT categories_string FROM $table_name ORDER BY id DESC LIMIT 1");
+    $latest_categories_array = explode(',', $latest_categories);
 ?>
 
 <div>
@@ -184,12 +284,12 @@ $latest_categories_array = explode(',', $latest_categories);
 			</legend>
 			<div class="category-wrapper">
 				 <?php
-                $categories = get_categories();
-                foreach ($categories as $category) {
-                    $checked = in_array($category->term_id, $latest_categories_array) ? 'checked' : '';
-                    echo '<div class="category-item"><label><input type="checkbox" name="selected_categories[]" value="' . $category->term_id . '" ' . $checked . '> ' . $category->name . '</label><br></div>';
-                }
-            ?>
+                    $categories = get_categories();
+                    foreach ($categories as $category) {
+                        $checked = in_array($category->term_id, $latest_categories_array) ? 'checked' : '';
+                        echo '<div class="category-item"><label><input type="checkbox" name="selected_categories[]" value="' . $category->term_id . '" ' . $checked . '> ' . $category->name . '</label><br></div>';
+                    }
+                    ?>
 			</div>
         </fieldset>
 		</section>
