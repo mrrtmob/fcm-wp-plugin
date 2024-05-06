@@ -128,24 +128,27 @@ if ($active_tab == 'front_page_options') {
     }
 
     // Handle form submission
-    if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["update_categories"])) {
-        if (isset($_POST["selected_categories"]) && is_array($_POST["selected_categories"])) {
-            $selected_categories = array_map('intval', $_POST["selected_categories"]); // Sanitize and validate
+	if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["update_categories"])) {
+		if (isset($_POST["selected_categories_hidden"])) {
+			$selected_categories = $_POST["selected_categories_hidden"] ? explode(',', $_POST["selected_categories_hidden"]) : [];
+			$selected_categories = array_filter($selected_categories, 'strlen'); // Removes any empty elements
+			$selected_categories = array_map('intval', $selected_categories);
 
-            // Save selected categories to the database
-            $category_ids = implode(',', $selected_categories);
-            if ($selected_categories_row) {
-                // Update existing row
-                $wpdb->update($table_name, array('category_ids' => $category_ids), array('id' => $selected_categories_row->id));
-            } else {
-                // Insert new row
-                $wpdb->insert($table_name, array('category_ids' => $category_ids));
-            }
+			$category_ids = implode(',', $selected_categories);
 
-            // Optionally, you can add a success message here
-            echo '<div class="updated"><p>Categories saved successfully.</p></div>';
-        }
-    }
+			if ($selected_categories_row) {
+				// Update existing row to either set category_ids to an empty string or populated string
+				$wpdb->update($table_name, array('category_ids' => $category_ids), array('id' => $selected_categories_row->id));
+			} else {
+				// Insert a new row, could set it to an empty string or skip insertion if not needed
+				$wpdb->insert($table_name, array('category_ids' => $category_ids));
+			}
+
+			echo '<div class="updated"><p>Categories saved successfully.</p></div>';
+		}
+	}
+
+
 ?>
     <div>
         <form action="" method="post" class="form-notification">
@@ -153,17 +156,39 @@ if ($active_tab == 'front_page_options') {
                 <legend><h4 style="margin: 0">Select Categories:</h4></legend>
                 <div class="category-wrapper">
                     <?php
-                    $categories = get_categories();
-                    foreach ($categories as $category) {
-                        $checked = in_array($category->term_id, $selected_categories) ? 'checked' : '';
-                        echo '<div class="category-item"><label><input type="checkbox" name="selected_categories[]" value="' . $category->term_id . '" ' . $checked . '> ' . $category->name . '</label><br></div>';
-                    }
-                    ?>
+                $categories = get_categories();
+                foreach ($categories as $category) {
+                    $checked = in_array($category->term_id, $selected_categories) ? 'checked' : '';
+                    echo '<div class="category-item"><label><input type="checkbox" name="selected_categories[]" value="' . $category->term_id . '" ' . $checked . ' onchange="updateSelectedCategories(this)"> ' . $category->name . '</label><br></div>';
+                }
+                ?>
                 </div>
             </fieldset>
+			<input type="hidden" name="selected_categories_hidden" id="selected_categories_hidden" value="<?php echo implode(',', $selected_categories); ?>">
             <div class="col-sm-10"><p class="submit"><input type="submit" name="update_categories" id="submit" class="button button-primary" value="Save Categories"></p></div>
         </form>
     </div>
+<script>
+    function updateSelectedCategories(checkbox) {
+    var selectedCategories = document.getElementById('selected_categories_hidden');
+    var categoryIds = selectedCategories.value ? selectedCategories.value.split(',') : [];
+    var categoryId = checkbox.value;
+
+    if (checkbox.checked) {
+        if (!categoryIds.includes(categoryId)) {
+            categoryIds.push(categoryId);
+        }
+    } else {
+        var index = categoryIds.indexOf(categoryId);
+        if (index !== -1) {
+            categoryIds.splice(index, 1);
+        }
+    }
+	categoryIds = categoryIds.filter(id => id !== '0' && id !== '');
+    selectedCategories.value = categoryIds.join(',');
+}
+
+</script>
     <style>
         input[type=checkbox] {
             margin: 0 !important;
@@ -350,7 +375,7 @@ if ($active_tab == 'front_page_options') {
             )
         );
 
-        // You can add additional logic here, such as redirecting the user to another page after submission
+        echo '<div class="updated"><p>Categories saved successfully.</p></div>';
     }
 ?>
 <?php

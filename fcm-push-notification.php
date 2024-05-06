@@ -1,6 +1,6 @@
 <?php
 /*
-Plugin Name: FCM Push Notification
+Plugin Name: MLMUPC Mobile Settings
 Description:Keep your app users informed with timely notifications via Firebase Cloud Messaging (FCM) whenever new content is published or existing content is updated.
 Version:1.0.0
 Author:tmob
@@ -10,7 +10,7 @@ License URI:https://www.gnu.org/licenses/gpl-2.0.html
 */
 
 /*
-FCM Push Notification is free software distributed under the GNU General Public License. 
+MLMUPC Mobile Settings is free software distributed under the GNU General Public License. 
 It comes with no warranty and can be redistributed and modified. 
 For details, visit https://www.gnu.org/licenses/gpl-2.0.html.
 */
@@ -665,7 +665,7 @@ function custom_categories_details_api_callback($data)
     // Fetch category IDs from the show_categories table
     $table_name = $wpdb->prefix . 'show_categories';
     $category_ids = $wpdb->get_col("SELECT category_ids FROM $table_name");
-
+	$category_ids = array_filter($category_ids);
     // Initialize an array to store category details
     $categories_details = array();
 
@@ -734,3 +734,63 @@ function custom_categories_details_api_callback($data)
 }
 
 // ========================= api get categories =============================
+
+
+
+// Add a custom API endpoint to retrieve news
+function custom_news_api_endpoint()
+{
+    register_rest_route('wp/v2', '/news/', array(
+        'methods' => 'GET',
+        'callback' => 'custom_news_api_callback',
+    ));
+}
+
+add_action('rest_api_init', 'custom_news_api_endpoint');
+
+// Callback function for the custom news endpoint
+function custom_news_api_callback($data)
+{
+    global $wpdb;
+
+    // Set default limit and page values
+    $limit = isset($data['limit']) ? absint($data['limit']) : 10; // Default limit is 10
+    $page = isset($data['page']) ? absint($data['page']) : 1; // Default page is 1
+
+    // Fetch category IDs from the show_categories table
+    $table_name = $wpdb->prefix . 'show_news';
+    $category_ids = $wpdb->get_col("SELECT category_ids FROM $table_name");
+
+    // Check if category IDs are fetched successfully
+    if (!empty($category_ids)) {
+        // Convert category IDs array to comma-separated string
+        $category_ids_str = implode(',', $category_ids);
+
+        // Construct the URL for the default WordPress REST API endpoint with pagination parameters
+        $api_url = home_url("/wp-json/wp/v2/posts?categories=$category_ids_str&per_page=$limit&page=$page");
+
+        // Fetch posts data from the default WordPress REST API
+        $response = wp_remote_get($api_url);
+
+        // Check if the request was successful
+        if (!is_wp_error($response) && wp_remote_retrieve_response_code($response) === 200) {
+            // Parse the response body as JSON
+            $posts = json_decode(wp_remote_retrieve_body($response), true);
+
+            // Check if posts are found
+            if (!empty($posts)) {
+                // Return the posts data
+                return rest_ensure_response($posts);
+            } else {
+                // No posts found
+                return new WP_Error('no_posts', 'No posts found', array('status' => 404));
+            }
+        } else {
+            // Error fetching posts from the default WordPress REST API
+            return new WP_Error('api_error', 'Error fetching posts from the API', array('status' => 500));
+        }
+    } else {
+        // No category IDs found
+        return new WP_Error('no_category_ids', 'No category IDs found', array('status' => 404));
+    }
+}
