@@ -665,7 +665,7 @@ function custom_categories_details_api_callback($data)
     // Fetch category IDs from the show_categories table
     $table_name = $wpdb->prefix . 'show_categories';
     $category_ids = $wpdb->get_col("SELECT category_ids FROM $table_name");
-	$category_ids = array_filter($category_ids);
+    $category_ids = array_filter($category_ids);
     // Initialize an array to store category details
     $categories_details = array();
 
@@ -749,15 +749,15 @@ function custom_news_api_endpoint()
 add_action('rest_api_init', 'custom_news_api_endpoint');
 
 // Callback function for the custom news endpoint
-function custom_news_api_callback($data)
+function custom_news_api_callback(WP_REST_Request $request)
 {
     global $wpdb;
 
     // Set default limit and page values
-    $limit = isset($data['limit']) ? absint($data['limit']) : 10; // Default limit is 10
-    $page = isset($data['page']) ? absint($data['page']) : 1; // Default page is 1
+    $limit = $request->get_param('limit') ? absint($request->get_param('limit')) : 10; // Default limit is 10
+    $page = $request->get_param('page') ? absint($request->get_param('page')) : 1; // Default page is 1
 
-    // Fetch category IDs from the show_categories table
+    // Fetch category IDs from the show_news table
     $table_name = $wpdb->prefix . 'show_news';
     $category_ids = $wpdb->get_col("SELECT category_ids FROM $table_name");
 
@@ -766,11 +766,22 @@ function custom_news_api_callback($data)
         // Convert category IDs array to comma-separated string
         $category_ids_str = implode(',', $category_ids);
 
+        // Extract the Bearer token from the Authorization header
+        $auth_header = $request->get_header('authorization');
+        $token = (strpos($auth_header, 'Bearer ') !== false) ? trim(str_replace('Bearer ', '', $auth_header)) : '';
+
         // Construct the URL for the default WordPress REST API endpoint with pagination parameters
         $api_url = home_url("/wp-json/wp/v2/posts?categories=$category_ids_str&per_page=$limit&page=$page");
 
+        // Set up headers with the token
+        $args = array(
+            'headers' => array(
+                'Authorization' => 'Bearer ' . $token
+            )
+        );
+
         // Fetch posts data from the default WordPress REST API
-        $response = wp_remote_get($api_url);
+        $response = wp_remote_get($api_url, $args);
 
         // Check if the request was successful
         if (!is_wp_error($response) && wp_remote_retrieve_response_code($response) === 200) {
